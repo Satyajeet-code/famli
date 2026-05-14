@@ -61,11 +61,17 @@ async function apiGet(path) {
 
 // Bot replies end with a line like:
 //   COLLECTED: {"goal_name": "...", "priority": null, ...}
+// The label may be wrapped in markdown bold (**COLLECTED:**), and the JSON
+// may contain embedded newlines if the LLM split a long value across lines.
 // Returns { collected: object|null, displayText: string } where displayText
 // has the COLLECTED line stripped for the chat bubble.
 function parseCollected(botMessage) {
   if (!botMessage) return { collected: null, displayText: "" };
-  const match = botMessage.match(/COLLECTED:\s*(\{.*\})\s*$/m);
+  // [\s\S] matches any character including newlines (since /s flag is not
+  // universally supported across older browsers, this is the portable trick).
+  const match = botMessage.match(
+    /\**\s*COLLECTED:\s*\**\s*(\{[\s\S]*\})\s*$/,
+  );
   if (!match) return { collected: null, displayText: botMessage.trim() };
   let collected = null;
   try {

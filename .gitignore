@@ -1,0 +1,36 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Logs (ephemeral debug dumps)
+logs/
+
+# Jupyter notebooks (scratch)
+*.ipynb
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+.docx
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
+
+# Frontend
+node_modules/

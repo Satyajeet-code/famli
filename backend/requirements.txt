@@ -1,0 +1,18 @@
+# Web framework
+fastapi
+uvicorn
+
+# Database
+sqlalchemy
+asyncpg
+psycopg2-binary
+
+# Configuration
+python-dotenv
+
+# Auth
+bcrypt
+pyjwt
+
+# LLM
+groq

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Research Buddy · Retirement Chat</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="chat-page">
+    <header class="topbar">
+      <h1>Research Buddy</h1>
+      <div>
+        <span class="user" id="user-label"></span>
+        <button id="logout">Sign out</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <div class="chat-pane">
+        <div class="thread" id="thread"></div>
+        <form class="composer" id="composer">
+          <input
+            id="message"
+            placeholder="Type a message…"
+            autocomplete="off"
+            required
+          />
+          <button type="submit" id="send">Send</button>
+        </form>
+      </div>
+
+      <aside class="side-panel">
+        <div class="panel-card">
+          <h2>Collected so far</h2>
+          <ul class="collected-list" id="collected"></ul>
+        </div>
+        <div class="panel-card corpus-card" id="corpus-card" hidden>
+          <h2>Retirement corpus</h2>
+          <div class="corpus-amount" id="corpus-amount"></div>
+          <div class="corpus-detail" id="corpus-future"></div>
+          <div class="corpus-detail" id="corpus-period"></div>
+          <div class="corpus-detail" id="corpus-real-rate"></div>
+        </div>
+      </aside>
+    </section>
+
+    <script src="app.js"></script>
+    <script>
+      Auth.requireSession();
+
+      const userLabel = document.getElementById("user-label");
+      const thread = document.getElementById("thread");
+      const composer = document.getElementById("composer");
+      const messageInput = document.getElementById("message");
+      const sendBtn = document.getElementById("send");
+      const collectedList = document.getElementById("collected");
+      const corpusCard = document.getElementById("corpus-card");
+
+      userLabel.textContent = `Signed in as ${Auth.username()}`;
+      renderCollectedPanel(collectedList, null);
+
+      document.getElementById("logout").addEventListener("click", () => {
+        Auth.clear();
+        window.location.href = "index.html";
+      });
+
+      function appendBubble(role, text) {
+        const div = document.createElement("div");
+        div.className = `bubble ${role}`;
+        if (role === "assistant") {
+          // Assistant messages may contain **bold**; render safely.
+          div.innerHTML = formatBotHtml(text);
+        } else {
+          div.textContent = text;
+        }
+        thread.appendChild(div);
+        thread.scrollTop = thread.scrollHeight;
+      }
+
+      function showCorpus(corpus) {
+        if (!corpus) {
+          corpusCard.hidden = true;
+          return;
+        }
+        corpusCard.hidden = false;
+        document.getElementById("corpus-amount").textContent =
+          `₹ ${Number(corpus.corpus).toLocaleString("en-IN")}`;
+        document.getElementById("corpus-future").textContent =
+          `Future annual expense: ₹ ${Number(corpus.future_annual_expense).toLocaleString("en-IN")}`;
+        document.getElementById("corpus-period").textContent =
+          `Retirement period: ${corpus.retirement_period_years} years`;
+        document.getElementById("corpus-real-rate").textContent =
+          `Real rate of return: ${(Number(corpus.real_rate) * 100).toFixed(2)}%`;
+      }
+
+      let latestCollected = null;
+
+      async function loadHistory() {
+        try {
+          const data = await apiGet(
+            `/api/retirement/history?user_id=${Auth.userId()}`,
+          );
+          for (const msg of data.messages) {
+            if (msg.role === "assistant") {
+              const { collected, displayText } = parseCollected(msg.message);
+              appendBubble("assistant", displayText || msg.message);
+              if (collected) latestCollected = collected;
+            } else {
+              appendBubble(msg.role, msg.message);
+            }
+          }
+          renderCollectedPanel(collectedList, latestCollected);
+        } catch (err) {
+          appendBubble("assistant", `Couldn't load history: ${err.message}`);
+        }
+      }
+
+      composer.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = messageInput.value.trim();
+        if (!text) return;
+        appendBubble("user", text);
+        messageInput.value = "";
+        sendBtn.disabled = true;
+        try {
+          const data = await apiPost("/api/retirement/chat", {
+            user_id: Auth.userId(),
+            message: text,
+          });
+          const { collected, displayText } = parseCollected(data.bot_message);
+          appendBubble("assistant", displayText || data.bot_message);
+          if (collected) latestCollected = collected;
+          renderCollectedPanel(collectedList, latestCollected);
+          if (data.corpus) showCorpus(data.corpus);
+        } catch (err) {
+          appendBubble("assistant", `Error: ${err.message}`);
+        } finally {
+          sendBtn.disabled = false;
+          messageInput.focus();
+        }
+      });
+
+      loadHistory();
+    </script>
+  </body>
+</html>

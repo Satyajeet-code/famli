@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Create account · Research Buddy</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="auth-wrap">
+      <form class="auth-card" id="signup-form">
+        <h1>Create your account</h1>
+        <p class="sub">It takes about thirty seconds.</p>
+
+        <label for="first_name">First name</label>
+        <input id="first_name" name="first_name" required />
+
+        <label for="last_name">Last name</label>
+        <input id="last_name" name="last_name" required />
+
+        <label for="username">Username</label>
+        <input id="username" name="username" required autocomplete="username" />
+
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          required
+          minlength="8"
+          autocomplete="new-password"
+        />
+
+        <button type="submit" id="submit">Create account</button>
+        <div class="error" id="error"></div>
+
+        <p class="switch">
+          Already have an account? <a href="index.html">Sign in</a>
+        </p>
+      </form>
+    </main>
+
+    <script src="app.js"></script>
+    <script>
+      const form = document.getElementById("signup-form");
+      const errorEl = document.getElementById("error");
+      const submitBtn = document.getElementById("submit");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorEl.textContent = "";
+        submitBtn.disabled = true;
+        try {
+          const data = await apiPost("/api/auth/signup", {
+            first_name: form.first_name.value.trim(),
+            last_name: form.last_name.value.trim(),
+            username: form.username.value.trim(),
+            password: form.password.value,
+          });
+          Auth.save(data.access_token, data.user_id, data.username);
+          window.location.href = "chat.html";
+        } catch (err) {
+          errorEl.textContent = err.message;
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

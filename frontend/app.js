@@ -1,6 +1,6 @@
 // Shared frontend helpers: API base, auth state, COLLECTED parser.
 
-const API_BASE = "http://localhost:8003";
+const API_BASE = "https://famli-backend.onrender.com";
 
 const Auth = {
   save(token, userId, username) {

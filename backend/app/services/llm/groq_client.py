@@ -97,19 +97,19 @@ class GroqClient:
         )
 
         # TODO REMOVE: temporary debug dump of full completion to logs/llm_responses.txt
-        try:
-            from datetime import datetime
-            from pathlib import Path
-            Path("logs").mkdir(exist_ok=True)
-            with open("logs/llm_responses.txt", "a", encoding="utf-8") as fp:
-                fp.write(
-                    f"--- ----------------------------------- "
-                    f"request_id={self.request_id} ---\n"
-                )
-                fp.write(completion.model_dump_json(indent=2))
-                fp.write("\n\n")
-        except Exception as dump_exc:
-            logger.warning("Failed to dump completion: %s", dump_exc)
+        # try:
+        #     from datetime import datetime
+        #     from pathlib import Path
+        #     Path("logs").mkdir(exist_ok=True)
+        #     with open("logs/llm_responses.txt", "a", encoding="utf-8") as fp:
+        #         fp.write(
+        #             f"--- ----------------------------------- "
+        #             f"request_id={self.request_id} ---\n"
+        #         )
+        #         fp.write(completion.model_dump_json(indent=2))
+        #         fp.write("\n\n")
+        # except Exception as dump_exc:
+        #     logger.warning("Failed to dump completion: %s", dump_exc)
         # TODO REMOVE: temporary debug dump of full completion to logs/llm_responses.txt
 
         message = completion.choices[0].message

@@ -86,10 +86,6 @@ class CorpusResult(BaseModel):
     real_rate: Decimal
     retirement_period_years: int
     corpus: Decimal
-    assumptions_applied: dict = Field(
-        default_factory=dict,
-        description="Defaults the calculator filled in when a user value was missing.",
-    )
 
 
 class ChatHistoryItem(BaseModel):

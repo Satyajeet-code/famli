@@ -148,6 +148,5 @@ async def calculate_retirement_corpus(
         "future_annual_expense": str(corpus.future_annual_expense),
         "real_rate": str(corpus.real_rate),
         "retirement_period_years": corpus.retirement_period_years,
-        "assumptions_applied": corpus.assumptions_applied,
     })
     return llm_content, corpus

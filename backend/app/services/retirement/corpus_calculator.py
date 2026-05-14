@@ -21,14 +21,11 @@ Defaults applied when an input is missing:
     expected_return  -> 0.07 (7%)
     life_expectancy  -> 80
 
-These defaults come from the spec's Assumptions section. The calculator
-returns which defaults were applied so the chat layer can mention them
-to the user.
+These defaults come from the spec's Assumptions section.
 """
 from __future__ import annotations
 
 from decimal import Decimal, getcontext
-from typing import Any, Dict
 
 from app.models.retirement_schemas import CorpusResult, RetirementInputs
 
@@ -61,25 +58,9 @@ def calculate_corpus(inputs: RetirementInputs) -> CorpusResult:
     if missing:
         raise ValueError(f"Missing required fields for calculation: {missing}")
 
-    assumptions_applied: Dict[str, Any] = {}
-
-    inflation = inputs.inflation_rate
-    if inflation is None:
-        inflation = DEFAULT_INFLATION
-        assumptions_applied["inflation_rate"] = float(DEFAULT_INFLATION)
-    inflation = Decimal(inflation)
-
-    expected_return = inputs.expected_return
-    if expected_return is None:
-        expected_return = DEFAULT_RETURN
-        assumptions_applied["expected_return"] = float(DEFAULT_RETURN)
-    expected_return = Decimal(expected_return)
-
-    life_expectancy = inputs.life_expectancy
-    if life_expectancy is None:
-        life_expectancy = DEFAULT_LIFE_EXPECTANCY
-        assumptions_applied["life_expectancy"] = DEFAULT_LIFE_EXPECTANCY
-    life_expectancy = int(life_expectancy)
+    inflation = Decimal(inputs.inflation_rate if inputs.inflation_rate is not None else DEFAULT_INFLATION)
+    expected_return = Decimal(inputs.expected_return if inputs.expected_return is not None else DEFAULT_RETURN)
+    life_expectancy = int(inputs.life_expectancy if inputs.life_expectancy is not None else DEFAULT_LIFE_EXPECTANCY)
 
     current_age = int(inputs.current_age)
     retirement_age = int(inputs.retirement_age)
@@ -112,5 +93,4 @@ def calculate_corpus(inputs: RetirementInputs) -> CorpusResult:
         real_rate=real_rate.quantize(Decimal("0.00000001")),
         retirement_period_years=retirement_period,
         corpus=corpus.quantize(Decimal("0.01")),
-        assumptions_applied=assumptions_applied,
     )

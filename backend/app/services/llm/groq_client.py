@@ -34,9 +34,19 @@ class GroqConfigurationError(RuntimeError):
 
 @dataclass(frozen=True)
 class ChatTurnResult:
-    """One assistant turn: free-text content and/or tool calls."""
+    """
+    One assistant turn from Groq.
+
+    - `content` and `tool_calls` are the convenience-parsed views the
+      service layer uses for dispatch (arguments are already JSON-decoded).
+    - `raw_message` is the SDK's full message object, preserved so the
+      service can `.model_dump()` it back into a fully OpenAI-compliant
+      assistant message for the followup call without manually rebuilding
+      the tool_calls envelope.
+    """
     content: str
     tool_calls: List[Dict[str, Any]]
+    raw_message: Any
 
 
 class GroqClient:
@@ -96,22 +106,6 @@ class GroqClient:
             tools=tools,
         )
 
-        # TODO REMOVE: temporary debug dump of full completion to logs/llm_responses.txt
-        # try:
-        #     from datetime import datetime
-        #     from pathlib import Path
-        #     Path("logs").mkdir(exist_ok=True)
-        #     with open("logs/llm_responses.txt", "a", encoding="utf-8") as fp:
-        #         fp.write(
-        #             f"--- ----------------------------------- "
-        #             f"request_id={self.request_id} ---\n"
-        #         )
-        #         fp.write(completion.model_dump_json(indent=2))
-        #         fp.write("\n\n")
-        # except Exception as dump_exc:
-        #     logger.warning("Failed to dump completion: %s", dump_exc)
-        # TODO REMOVE: temporary debug dump of full completion to logs/llm_responses.txt
-
         message = completion.choices[0].message
         content = message.content or ""
 
@@ -133,4 +127,4 @@ class GroqClient:
             "request_id: '%s' Groq chat_with_tools returned content_len=%d tool_calls=%d",
             self.request_id, len(content), len(tool_calls),
         )
-        return ChatTurnResult(content=content, tool_calls=tool_calls)
+        return ChatTurnResult(content=content, tool_calls=tool_calls, raw_message=message)

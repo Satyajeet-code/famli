@@ -16,7 +16,13 @@
 
     <section class="layout">
       <div class="chat-pane">
-        <div class="thread" id="thread"></div>
+        <div class="thread" id="thread">
+          <div id="typing-indicator" class="bubble assistant typing" hidden>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
         <form class="composer" id="composer">
           <input
             id="message"
@@ -49,6 +55,7 @@
 
       const userLabel = document.getElementById("user-label");
       const thread = document.getElementById("thread");
+      const typingIndicator = document.getElementById("typing-indicator");
       const composer = document.getElementById("composer");
       const messageInput = document.getElementById("message");
       const sendBtn = document.getElementById("send");
@@ -92,6 +99,21 @@
           `Real rate of return: ${(Number(corpus.real_rate) * 100).toFixed(2)}%`;
       }
 
+      function showTyping() {
+        if (!typingIndicator) return;
+        
+        // Re-append the indicator to move it to the very bottom of the thread
+        thread.appendChild(typingIndicator); 
+        
+        typingIndicator.hidden = false;
+        thread.scrollTop = thread.scrollHeight;
+      }
+
+      function hideTyping() {
+        if (!typingIndicator) return;
+        typingIndicator.hidden = true;
+      }
+
       let latestCollected = null;
 
       async function loadHistory() {
@@ -121,6 +143,7 @@
         appendBubble("user", text);
         messageInput.value = "";
         sendBtn.disabled = true;
+        showTyping();
         try {
           const data = await apiPost("/api/retirement/chat", {
             user_id: Auth.userId(),
@@ -134,6 +157,7 @@
         } catch (err) {
           appendBubble("assistant", `Error: ${err.message}`);
         } finally {
+          hideTyping();
           sendBtn.disabled = false;
           messageInput.focus();
         }

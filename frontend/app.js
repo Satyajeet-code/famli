@@ -77,8 +77,30 @@ function parseCollected(botMessage) {
   return { collected, displayText };
 }
 
-// Escape HTML so user/bot content can't inject markup, then convert the
-// limited markdown the LLM emits (currently just **bold**) into safe HTML.
+// Format a bare number string with Indian-style digit grouping
+// (e.g. "1437934.92" -> "14,37,934.92"). The LLM is instructed to emit
+// rupee numbers without commas; we add them here for display.
+function formatIndianNumber(rawDigits) {
+  if (rawDigits == null) return "";
+  const num = Number(rawDigits);
+  if (!Number.isFinite(num)) return String(rawDigits);
+  return num.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+// Find bare "₹<digits>[.decimals]" sequences in the bot's text and replace
+// each with the Indian-comma-formatted version. Runs after HTML-escape so
+// no markup injection risk.
+function formatRupeesInText(text) {
+  // Match ₹ followed by digits (no commas), optional decimal part.
+  // Lookbehind avoids partial matches inside already-grouped strings.
+  return text.replace(/₹\s*(\d+(?:\.\d+)?)/g, (_, digits) => {
+    return `₹${formatIndianNumber(digits)}`;
+  });
+}
+
+// Escape HTML so user/bot content can't inject markup, then format any
+// rupee numbers with Indian-style commas, then convert the limited
+// markdown the LLM emits (currently just **bold**) into safe HTML.
 function formatBotHtml(text) {
   if (!text) return "";
   const escaped = text
@@ -87,7 +109,8 @@ function formatBotHtml(text) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-  return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  const withRupees = formatRupeesInText(escaped);
+  return withRupees.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
 
 const FIELD_LABELS = [

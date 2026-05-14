@@ -21,14 +21,24 @@
         <input id="username" name="username" required autocomplete="username" />
 
         <label for="password">Password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          minlength="8"
-          autocomplete="new-password"
-        />
+        <div class="password-field">
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            minlength="8"
+            autocomplete="new-password"
+          />
+          <button
+            type="button"
+            class="toggle-password"
+            data-target="password"
+            aria-label="Show password"
+          >
+            Show
+          </button>
+        </div>
 
         <button type="submit" id="submit">Create account</button>
         <div class="error" id="error"></div>
@@ -45,10 +55,27 @@
       const errorEl = document.getElementById("error");
       const submitBtn = document.getElementById("submit");
 
+      document.querySelectorAll(".toggle-password").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const input = document.getElementById(btn.dataset.target);
+          const showing = input.type === "text";
+          input.type = showing ? "password" : "text";
+          btn.textContent = showing ? "Show" : "Hide";
+          btn.setAttribute(
+            "aria-label",
+            showing ? "Show password" : "Hide password",
+          );
+        });
+      });
+
+      const originalSubmitText = submitBtn.textContent;
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         errorEl.textContent = "";
         submitBtn.disabled = true;
+        submitBtn.innerHTML =
+          '<span class="btn-spinner" aria-hidden="true"></span>Creating account…';
         try {
           const data = await apiPost("/api/auth/signup", {
             first_name: form.first_name.value.trim(),
@@ -62,6 +89,7 @@
           errorEl.textContent = err.message;
         } finally {
           submitBtn.disabled = false;
+          submitBtn.textContent = originalSubmitText;
         }
       });
     </script>

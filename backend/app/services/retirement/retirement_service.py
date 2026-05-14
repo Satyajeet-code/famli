@@ -82,17 +82,7 @@ class RetirementService:
 
         client = self._llm_client or GroqClient(request_id=self.request_id)
 
-        # TODO REMOVE: temporary debug dump of LLM input messages
-        # try:
-        #     from pathlib import Path
-        #     Path("logs").mkdir(exist_ok=True)
-        #     with open("logs/llm_inputs.txt", "a", encoding="utf-8") as fp:
-        #         fp.write(f"--- request_id={self.request_id} call=initial ---\n")
-        #         fp.write(json.dumps(messages, indent=2, default=str))
-        #         fp.write("\n\n")
-        # except Exception as dump_exc:
-        #     logger.warning("Failed to dump LLM input: %s", dump_exc)
-        # TODO REMOVE: temporary debug dump of LLM input messages
+
 
         response = await client.chat_with_tools(messages=messages, tools=[CALCULATE_TOOL])
 
@@ -103,22 +93,8 @@ class RetirementService:
             await self._append_history(user_id, "assistant", assistant_text)
             return ChatResponse(bot_message=assistant_text, corpus=None)
 
-        # Tool-call branch.
-        messages.append({
-            "role": "assistant",
-            "content": response.content or None,
-            "tool_calls": [
-                {
-                    "id": call["id"],
-                    "type": "function",
-                    "function": {
-                        "name": call["name"],
-                        "arguments": json.dumps(call.get("arguments") or {}),
-                    },
-                }
-                for call in response.tool_calls
-            ],
-        })
+        # Tool-call branch. 
+        messages.append(response.raw_message.model_dump(exclude_none=True))
 
         corpus_result: Optional[CorpusResult] = None
         for call in response.tool_calls:
@@ -138,32 +114,7 @@ class RetirementService:
                 "content": llm_content,
             })
 
-            # TODO REMOVE: temporary debug dump of tool result fed back to the LLM
-            # try:
-            #     from pathlib import Path
-            #     Path("logs").mkdir(exist_ok=True)
-            #     with open("logs/tool_results.txt", "a", encoding="utf-8") as fp:
-            #         fp.write(
-            #             f"--- request_id={self.request_id} "
-            #             f"tool={call['name']} tool_call_id={call['id']} ---\n"
-            #         )
-            #         fp.write(llm_content)
-            #         fp.write("\n\n")
-            # except Exception as dump_exc:
-            #     logger.warning("Failed to dump tool result: %s", dump_exc)
-            # TODO REMOVE: temporary debug dump of tool result fed back to the LLM
-
-        # TODO REMOVE: temporary debug dump of LLM input messages (followup call)
-        # try:
-        #     from pathlib import Path
-        #     Path("logs").mkdir(exist_ok=True)
-        #     with open("logs/llm_inputs.txt", "a", encoding="utf-8") as fp:
-        #         fp.write(f"--- request_id={self.request_id} call=followup ---\n")
-        #         fp.write(json.dumps(messages, indent=2, default=str))
-        #         fp.write("\n\n")
-        # except Exception as dump_exc:
-        #     logger.warning("Failed to dump LLM input: %s", dump_exc)
-        # TODO REMOVE: temporary debug dump of LLM input messages (followup call)
+        
 
         followup = await client.chat_with_tools(messages=messages, tools=[CALCULATE_TOOL])
         assistant_text = followup.content or (

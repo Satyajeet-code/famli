@@ -94,6 +94,4 @@ CONSTRAINTS:
 - Use **markdown bold** on key terms, field names, and rupee amounts in your replies.
 - The literal marker "COLLECTED:" must always be written as PLAIN TEXT — never wrap it in **markdown bold** or any other formatting. The bold rule for emphasis does NOT apply to this marker. Write the entire COLLECTED line on ONE single line with no internal line breaks, even if the JSON is long.
 - The JSON should not have any bold markers.
-
-
 """

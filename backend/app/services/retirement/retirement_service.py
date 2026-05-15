@@ -52,98 +52,112 @@ class RetirementService:
 
     async def chat_turn(self, user_id: int, message: str) -> ChatResponse:
         """Handle one chat turn from the user."""
-        await self._ensure_user_exists(user_id)
+        try:
+            await self._ensure_user_exists(user_id)
 
-        message_stripped = (message or "").strip()
-        if not message_stripped:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="message must not be empty",
-            )
+            message_stripped = (message or "").strip()
+            if not message_stripped:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="message must not be empty",
+                )
 
-        # Persist user turn first so it survives an LLM failure.
-        await self._append_history(user_id, "user", message_stripped)
+            # Persist user turn first so it survives an LLM failure.
+            await self._append_history(user_id, "user", message_stripped)
 
-        history = await self._load_history(user_id)
-        established = await self._load_established_inputs(user_id)
+            history = await self._load_history(user_id)
+            established = await self._load_established_inputs(user_id)
 
-        messages: List[Dict[str, Any]] = [{"role": "system", "content": get_system_prompt()}]
-        if established:
-            messages.append({
-                "role": "system",
-                "content": (
-                    "PREVIOUSLY ESTABLISHED VALUES (from this user's last completed calculation). "
-                    "Treat these as authoritative defaults — the user already gave them in an earlier "
-                    "session. Do NOT ask for them again unless the user volunteers a change.\n"
-                    f"{json.dumps(established, default=str)}"
-                ),
-            })
-        messages.extend({"role": h["role"], "content": h["content"]} for h in history)
+            messages: List[Dict[str, Any]] = [{"role": "system", "content": get_system_prompt()}]
+            if established:
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        "PREVIOUSLY ESTABLISHED VALUES (from this user's last completed calculation). "
+                        "Treat these as authoritative defaults — the user already gave them in an earlier "
+                        "session. Do NOT ask for them again unless the user volunteers a change.\n"
+                        f"{json.dumps(established, default=str)}"
+                    ),
+                })
+            messages.extend({"role": h["role"], "content": h["content"]} for h in history)
 
-        client = self._llm_client or GroqClient(request_id=self.request_id)
+            client = self._llm_client or GroqClient(request_id=self.request_id)
 
+            response = await client.chat_with_tools(messages=messages, tools=[CALCULATE_TOOL])
 
+            if not response.tool_calls:
+                assistant_text = response.content or (
+                    "Sorry, I lost my train of thought. Could you repeat that?"
+                )
+                await self._append_history(user_id, "assistant", assistant_text)
+                return ChatResponse(bot_message=assistant_text, corpus=None)
 
-        response = await client.chat_with_tools(messages=messages, tools=[CALCULATE_TOOL])
+            # Tool-call branch.
+            messages.append(response.raw_message.model_dump(exclude_none=True))
 
-        if not response.tool_calls:
-            assistant_text = response.content or (
-                "Sorry, I lost my train of thought. Could you repeat that?"
+            corpus_result: Optional[CorpusResult] = None
+            for call in response.tool_calls:
+                if call["name"] != TOOL_NAME:
+                    llm_content = json.dumps({"error": f"Unknown tool: {call['name']}"})
+                else:
+                    args = call.get("arguments") or {}
+                    llm_content, corpus = await calculate_retirement_corpus(
+                        user_id=user_id, **args
+                    )
+                    corpus_result = corpus or corpus_result
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "name": call["name"],
+                    "content": llm_content,
+                })
+
+            followup = await client.chat_with_tools(messages=messages, tools=[CALCULATE_TOOL])
+            assistant_text = followup.content or (
+                "I've computed your retirement corpus. Let me know if you'd like to adjust anything."
             )
             await self._append_history(user_id, "assistant", assistant_text)
-            return ChatResponse(bot_message=assistant_text, corpus=None)
-
-        # Tool-call branch. 
-        messages.append(response.raw_message.model_dump(exclude_none=True))
-
-        corpus_result: Optional[CorpusResult] = None
-        for call in response.tool_calls:
-            if call["name"] != TOOL_NAME:
-                llm_content = json.dumps({"error": f"Unknown tool: {call['name']}"})
-            else:
-                args = call.get("arguments") or {}
-                llm_content, corpus = await calculate_retirement_corpus(
-                    user_id=user_id, **args
-                )
-                corpus_result = corpus or corpus_result
-
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call["id"],
-                "name": call["name"],
-                "content": llm_content,
-            })
-
-        
-
-        followup = await client.chat_with_tools(messages=messages, tools=[CALCULATE_TOOL])
-        assistant_text = followup.content or (
-            "I've computed your retirement corpus. Let me know if you'd like to adjust anything."
-        )
-        await self._append_history(user_id, "assistant", assistant_text)
-        return ChatResponse(bot_message=assistant_text, corpus=corpus_result)
+            return ChatResponse(bot_message=assistant_text, corpus=corpus_result)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "request_id: '%s' Error in chat_turn for user_id %d: %s",
+                self.request_id, user_id, str(e), exc_info=True,
+            )
+            raise
 
     async def get_history(self, user_id: int) -> List[Dict[str, Any]]:
         """Return the user's full chat history ordered chronologically."""
-        await self._ensure_user_exists(user_id)
+        try:
+            await self._ensure_user_exists(user_id)
 
-        chat = metadata.tables["chat_history_dummy"]
-        async with AsyncSessionLocal() as session:
-            result = await session.execute(
-                select(chat.c.id, chat.c.role, chat.c.message, chat.c.created_at)
-                .where(chat.c.user_id == user_id)
-                .order_by(chat.c.created_at.asc())
+            chat = metadata.tables["chat_history_dummy"]
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(
+                    select(chat.c.id, chat.c.role, chat.c.message, chat.c.created_at)
+                    .where(chat.c.user_id == user_id)
+                    .order_by(chat.c.created_at.asc())
+                )
+                rows = list(result.all())
+            return [
+                {
+                    "id": r.id,
+                    "role": r.role,
+                    "message": r.message,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ]
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "request_id: '%s' Error in get_history for user_id %d: %s",
+                self.request_id, user_id, str(e), exc_info=True,
             )
-            rows = list(result.all())
-        return [
-            {
-                "id": r.id,
-                "role": r.role,
-                "message": r.message,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in rows
-        ]
+            raise
 
     # ------------------------------------------------------------------ #
     # DB                                                                 #

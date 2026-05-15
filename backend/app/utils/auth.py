@@ -61,7 +61,7 @@ def _get_expires_minutes() -> int:
     try:
         return int(os.getenv("JWT_EXPIRES_MINUTES", str(DEFAULT_EXPIRES_MINUTES)))
     except ValueError:
-        logger.warning("JWT_EXPIRES_MINUTES is not an int; using default %d", DEFAULT_EXPIRES_MINUTES)
+        logger.error("JWT_EXPIRES_MINUTES is not an int; using default %d", DEFAULT_EXPIRES_MINUTES)
         return DEFAULT_EXPIRES_MINUTES
 
 

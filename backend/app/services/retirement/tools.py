@@ -137,7 +137,7 @@ async def calculate_retirement_corpus(
     try:
         corpus = calculate_corpus(inputs)
     except ValueError as exc:
-        logger.warning("Calculation refused: %s", exc)
+        logger.error("Calculation refused: %s", exc)
         return json.dumps({"error": str(exc)}), None
 
     await _upsert_inputs(user_id, inputs)

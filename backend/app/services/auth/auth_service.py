@@ -39,97 +39,115 @@ class AuthService:
         written in the same transaction, so a new account always starts
         with the welcome message ready to render.
         """
-        users = metadata.tables["users_dummy"]
-        chat_history = metadata.tables["chat_history_dummy"]
+        try:
+            users = metadata.tables["users_dummy"]
+            chat_history = metadata.tables["chat_history_dummy"]
 
-        logger.info(
-            "request_id: '%s' Signup attempt for username='%s'",
-            self.request_id, payload.username,
-        )
-
-        async with AsyncSessionLocal() as session:
-            existing = await session.execute(
-                select(users.c.id).where(users.c.username == payload.username)
+            logger.info(
+                "request_id: '%s' Signup attempt for username='%s'",
+                self.request_id, payload.username,
             )
-            if existing.scalar() is not None:
-                logger.warning(
-                    "request_id: '%s' Username '%s' already taken",
-                    self.request_id, payload.username,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Username already taken",
-                )
 
-            stmt = (
-                insert(users)
-                .values(
-                    username=payload.username,
-                    first_name=payload.first_name,
-                    last_name=payload.last_name,
-                    password_hash=hash_password(payload.password),
+            async with AsyncSessionLocal() as session:
+                existing = await session.execute(
+                    select(users.c.id).where(users.c.username == payload.username)
                 )
-                .returning(users.c.id)
+                if existing.scalar() is not None:
+                    logger.error(
+                        "request_id: '%s' Username '%s' already taken",
+                        self.request_id, payload.username,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Username already taken",
+                    )
+
+                stmt = (
+                    insert(users)
+                    .values(
+                        username=payload.username,
+                        first_name=payload.first_name,
+                        last_name=payload.last_name,
+                        password_hash=hash_password(payload.password),
+                    )
+                    .returning(users.c.id)
+                )
+                result = await session.execute(stmt)
+                new_id = int(result.scalar())
+
+                await session.execute(
+                    insert(chat_history).values(
+                        user_id=new_id,
+                        role="assistant",
+                        message=get_welcome_message(),
+                    )
+                )
+                await session.commit()
+
+            token, expires_in = create_access_token(user_id=new_id, username=payload.username)
+            logger.info(
+                "request_id: '%s' User '%s' created with id=%d",
+                self.request_id, payload.username, new_id,
             )
-            result = await session.execute(stmt)
-            new_id = int(result.scalar())
-
-            await session.execute(
-                insert(chat_history).values(
-                    user_id=new_id,
-                    role="assistant",
-                    message=get_welcome_message(),
-                )
+            return TokenResponse(
+                access_token=token,
+                user_id=new_id,
+                username=payload.username,
+                expires_in=expires_in,
             )
-            await session.commit()
-
-        token, expires_in = create_access_token(user_id=new_id, username=payload.username)
-        logger.info(
-            "request_id: '%s' User '%s' created with id=%d",
-            self.request_id, payload.username, new_id,
-        )
-        return TokenResponse(
-            access_token=token,
-            user_id=new_id,
-            username=payload.username,
-            expires_in=expires_in,
-        )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "request_id: '%s' Error in signup for username='%s': %s",
+                self.request_id, payload.username, str(e), exc_info=True,
+            )
+            raise
 
     async def login(self, payload: LoginRequest) -> TokenResponse:
         """Verify credentials and return an access token."""
-        users = metadata.tables["users_dummy"]
+        try:
+            users = metadata.tables["users_dummy"]
 
-        logger.info(
-            "request_id: '%s' Login attempt for username='%s'",
-            self.request_id, payload.username,
-        )
-
-        async with AsyncSessionLocal() as session:
-            result = await session.execute(
-                select(users.c.id, users.c.username, users.c.password_hash).where(
-                    users.c.username == payload.username
-                )
-            )
-            row = result.first()
-
-        if row is None or not verify_password(payload.password, row.password_hash):
-            logger.warning(
-                "request_id: '%s' Invalid credentials for username='%s'",
+            logger.info(
+                "request_id: '%s' Login attempt for username='%s'",
                 self.request_id, payload.username,
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid username or password",
-            )
 
-        token, expires_in = create_access_token(user_id=int(row.id), username=row.username)
-        logger.info(
-            "request_id: '%s' User '%s' logged in (id=%d)",
-            self.request_id, row.username, row.id,
-        )
-        return TokenResponse(
-            access_token=token,
-            user_id=int(row.id),
-            username=row.username,
-            expires_in=expires_in,
-        )
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(
+                    select(users.c.id, users.c.username, users.c.password_hash).where(
+                        users.c.username == payload.username
+                    )
+                )
+                row = result.first()
+
+            if row is None or not verify_password(payload.password, row.password_hash):
+                logger.error(
+                    "request_id: '%s' Invalid credentials for username='%s'",
+                    self.request_id, payload.username,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid username or password",
+                )
+
+            token, expires_in = create_access_token(user_id=int(row.id), username=row.username)
+            logger.info(
+                "request_id: '%s' User '%s' logged in (id=%d)",
+                self.request_id, row.username, row.id,
+            )
+            return TokenResponse(
+                access_token=token,
+                user_id=int(row.id),
+                username=row.username,
+                expires_in=expires_in,
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                "request_id: '%s' Error in login for username='%s': %s",
+                self.request_id, payload.username, str(e), exc_info=True,
+            )
+            raise

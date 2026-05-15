@@ -131,6 +131,15 @@ const FIELD_LABELS = [
   ["expected_return", "Expected Return"],
 ];
 
+function formatRateValue(key, value) {
+  if (key !== "inflation_rate" && key !== "expected_return") return String(value);
+  const num = Number(value);
+  if (Number.isFinite(num) && num > 0 && num <= 1) {
+    return `${(num * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+  }
+  return String(value);
+}
+
 function renderCollectedPanel(panel, collected) {
   panel.innerHTML = "";
   for (const [key, label] of FIELD_LABELS) {
@@ -143,7 +152,7 @@ function renderCollectedPanel(panel, collected) {
     const valueSpan = document.createElement("span");
     valueSpan.className = "field-value";
     valueSpan.textContent =
-      value === null || value === undefined ? "—" : String(value);
+      value === null || value === undefined ? "—" : formatRateValue(key, value);
     li.appendChild(labelSpan);
     li.appendChild(valueSpan);
     panel.appendChild(li);
